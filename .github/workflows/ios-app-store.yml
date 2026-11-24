@@ -1,0 +1,212 @@
+# iOS App Store release: builds the Flutter app on a GitHub-hosted Mac, signs it
+# with the Apple Distribution certificate and uploads it to App Store Connect.
+#
+# Start it from GitHub → Actions → "iOS App Store release" → Run workflow.
+# After the upload finishes processing (usually 5–30 minutes), pick the build on
+# the version page in App Store Connect and click "Add for Review".
+#
+# Repository secrets (Settings → Secrets and variables → Actions):
+#   IOS_DIST_CERT_P12_BASE64      Apple Distribution certificate + private key (.p12), base64
+#   IOS_DIST_CERT_PASSWORD        password of that .p12
+#   IOS_PROVISION_PROFILE_BASE64  "App Store Connect" provisioning profile for the app, base64
+#   APPSTORE_API_KEY_ID           App Store Connect API key ID
+#   APPSTORE_API_ISSUER_ID        App Store Connect API issuer ID
+#   APPSTORE_API_PRIVATE_KEY      full contents of the AuthKey_XXXXXXXXXX.p8 file
+# scripts/ios_signing.sh makes the first three on Linux, so no Mac is needed.
+
+name: iOS App Store release
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_name:
+        description: "App version, e.g. 1.0.1 (blank = version in pubspec.yaml)"
+        required: false
+        default: ""
+      build_number:
+        description: "Build number, higher than every earlier upload (blank = pubspec build number + run number)"
+        required: false
+        default: ""
+      upload:
+        description: "Upload to App Store Connect (untick to only test building and signing)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-app-store
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: "3.41.4" # the Flutter version this project was last built with
+  APP_BUNDLE_ID: com.varia.lifestyle
+
+jobs:
+  ios:
+    name: Build, sign and upload
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Check secrets
+        env:
+          IOS_DIST_CERT_P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
+          IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+          IOS_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          UPLOAD: ${{ inputs.upload }}
+        run: |
+          required="IOS_DIST_CERT_P12_BASE64 IOS_DIST_CERT_PASSWORD IOS_PROVISION_PROFILE_BASE64"
+          if [ "$UPLOAD" = "true" ]; then
+            required="$required APPSTORE_API_KEY_ID APPSTORE_API_ISSUER_ID APPSTORE_API_PRIVATE_KEY"
+          fi
+          missing=0
+          for name in $required; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Repository secret $name is not set (Settings → Secrets and variables → Actions)."
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Select newest stable Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Work out version and build number
+        env:
+          INPUT_BUILD_NAME: ${{ inputs.build_name }}
+          INPUT_BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          set -euo pipefail
+          pubspec_version=$(sed -nE 's/^version:[[:space:]]*([^[:space:]#]+).*/\1/p' pubspec.yaml | head -n1)
+          default_name=${pubspec_version%%+*}
+          default_number=0
+          case "$pubspec_version" in *+*) default_number=${pubspec_version#*+} ;; esac
+
+          build_name=${INPUT_BUILD_NAME//[[:space:]]/}
+          build_number=${INPUT_BUILD_NUMBER//[[:space:]]/}
+          build_name=${build_name:-$default_name}
+          build_number=${build_number:-$((10#$default_number + GITHUB_RUN_NUMBER))}
+
+          [[ "$build_name" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] || { echo "::error::Version '$build_name' must look like 1.0.1"; exit 1; }
+          [[ "$build_number" =~ ^[0-9]+$ ]] || { echo "::error::Build number '$build_number' must be a whole number"; exit 1; }
+
+          echo "BUILD_NAME=$build_name" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=$build_number" >> "$GITHUB_ENV"
+          echo "Version **$build_name**, build **$build_number**, Xcode $(xcodebuild -version | head -n1 | cut -d' ' -f2)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install certificate and provisioning profile
+        env:
+          IOS_DIST_CERT_P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
+          IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+          IOS_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/app-signing.keychain-db"
+          keychain_password=$(openssl rand -base64 32)
+          echo "::add-mask::$keychain_password"
+
+          echo "$IOS_DIST_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/dist.p12"
+          echo "$IOS_PROVISION_PROFILE_BASE64" | base64 --decode > "$RUNNER_TEMP/app.mobileprovision"
+
+          # Temporary keychain holding only the distribution certificate.
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          curl -fsSL -o "$RUNNER_TEMP/AppleWWDRCAG3.cer" https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer
+          security import "$RUNNER_TEMP/AppleWWDRCAG3.cer" -k "$keychain" -t cert -A || true
+          security import "$RUNNER_TEMP/dist.p12" -k "$keychain" -P "$IOS_DIST_CERT_PASSWORD" -A -t cert -f pkcs12
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+
+          identities=$(security find-identity -v -p codesigning "$keychain")
+          echo "$identities"
+          line=$(echo "$identities" | grep -E '"(Apple|iPhone) Distribution' | head -n1 || true)
+          if [ -z "$line" ]; then
+            echo "::error::No valid Apple Distribution certificate in IOS_DIST_CERT_P12_BASE64. Check the .p12 and IOS_DIST_CERT_PASSWORD."
+            exit 1
+          fi
+          identity_sha1=$(echo "$line" | awk '{print $2}')
+          identity_name=$(echo "$line" | sed -E 's/^[^"]*"(.*)"[^"]*$/\1/')
+          echo "SIGNING_IDENTITY=$identity_name" >> "$GITHUB_ENV"
+
+          # Read the profile, check it matches the app and certificate, and
+          # write ExportOptions.plist plus the push entitlement.
+          security cms -D -i "$RUNNER_TEMP/app.mobileprovision" > "$RUNNER_TEMP/profile.plist"
+          python3 .github/scripts/ios_signing_prepare.py \
+            --profile "$RUNNER_TEMP/profile.plist" \
+            --identity-sha1 "$identity_sha1" \
+            --bundle-id "$APP_BUNDLE_ID" \
+            --entitlements ios/Runner/Runner.entitlements \
+            --export-options "$RUNNER_TEMP/ExportOptions.plist"
+
+          # Xcode 16+ reads profiles from UserData; older Xcode from MobileDevice.
+          profile_uuid=$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$RUNNER_TEMP/profile.plist")
+          for dir in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" "$HOME/Library/MobileDevice/Provisioning Profiles"; do
+            mkdir -p "$dir"
+            cp "$RUNNER_TEMP/app.mobileprovision" "$dir/$profile_uuid.mobileprovision"
+          done
+
+      - name: Set Xcode project to App Store signing
+        run: |
+          set -euo pipefail
+          ruby -e 'require "xcodeproj"' 2>/dev/null || gem install --user-install xcodeproj --no-document
+          ruby .github/scripts/ios_configure_project.rb
+
+      - name: Build signed IPA
+        run: |
+          flutter build ipa --release \
+            --build-name="$BUILD_NAME" \
+            --build-number="$BUILD_NUMBER" \
+            --export-options-plist="$RUNNER_TEMP/ExportOptions.plist"
+
+      - name: Keep the IPA for 7 days
+        uses: actions/upload-artifact@v4
+        with:
+          name: lifestyle-ios-${{ env.BUILD_NAME }}-${{ env.BUILD_NUMBER }}
+          path: build/ios/ipa/*.ipa
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload to App Store Connect
+        if: ${{ inputs.upload }}
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          key_id=${APPSTORE_API_KEY_ID//[[:space:]]/}
+          issuer_id=${APPSTORE_API_ISSUER_ID//[[:space:]]/}
+          key_dir="$HOME/.appstoreconnect/private_keys"
+          mkdir -p "$key_dir"
+          printf '%s\n' "$APPSTORE_API_PRIVATE_KEY" > "$key_dir/AuthKey_$key_id.p8"
+
+          ipa=$(find build/ios/ipa -maxdepth 1 -name '*.ipa' | head -n1)
+          [ -n "$ipa" ] || { echo "::error::No .ipa found in build/ios/ipa"; exit 1; }
+
+          xcrun altool --upload-app --type ios --file "$ipa" --apiKey "$key_id" --apiIssuer "$issuer_id"
+          echo "Uploaded to App Store Connect. It appears under TestFlight once Apple finishes processing, then you can select it on the App Store version page." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove signing files
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/dist.p12" "$RUNNER_TEMP/app.mobileprovision" "$RUNNER_TEMP/profile.plist"
+          rm -rf "$HOME/.appstoreconnect/private_keys"
