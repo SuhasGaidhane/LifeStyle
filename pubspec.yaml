@@ -1,0 +1,73 @@
+name: lifestyle
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+15
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # 🔹 Firebase / Push Notifications
+  firebase_core: ^3.6.0
+  firebase_messaging: ^15.1.3
+  flutter_local_notifications: ^17.2.3
+
+  # 🔹 State Management & Routing
+  get: ^4.6.6
+
+  # 🔹 Networking & Local Storage
+  http: ^1.2.0
+  get_storage: ^2.1.1
+
+  # 🔹 UI / Fonts / Animations
+  google_fonts: ^8.1.0
+  flutter_svg: ^2.0.10+1
+  cached_network_image: ^3.3.1
+  carousel_slider: ^5.1.2
+  shimmer: ^3.0.0
+
+  # 🔹 OTP / Forms
+  pin_code_fields: ^8.0.1
+
+  # 🔹 Payments
+  razorpay_flutter:
+
+  # 🔹 Admin bulk import (Excel)
+  file_picker: ^8.1.2
+  excel: ^4.0.6
+
+  # 🔹 Image / Video / Media
+  image_picker: ^1.1.2
+  image_cropper: 12.2.1
+  video_player: ^2.8.6
+#  chewie: ^1.8.5
+  photo_view: ^0.15.0
+
+  # 🔹 Utilities
+  intl: ^0.19.0
+  url_launcher: ^6.3.0
+  share_plus: ^10.0.0
+  path_provider: ^2.1.4
+  geolocator: ^13.0.1
+  visibility_detector: ^0.4.0+2
+  pro_image_editor: 12.2.1
+  dropdown_search :
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/

@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- ── Permissions (iOS usage descriptions) ───────────────────────── -->
+	<!-- Location — geolocator (auto-detect shop coordinates) -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Your location is used to auto-detect your shop's coordinates.</string>
+	<!-- Camera — image_picker "Camera" option + image editor -->
+	<key>NSCameraUsageDescription</key>
+	<string>Camera access lets you take photos for your shop, products, posts and profile.</string>
+	<!-- Photo library — image_picker "Gallery" option -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photo library access lets you upload images and videos for your shop, posts and profile.</string>
+	<!-- Saving media to the photo library (share / downloads) -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Allows saving images to your photo library.</string>
+	<!-- Microphone — recording videos -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Microphone access is needed to record videos.</string>
+	<!-- Apps this app may open/detect (url_launcher, App Store, UPI apps for Razorpay) -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tel</string>
+		<string>telprompt</string>
+		<string>sms</string>
+		<string>mailto</string>
+		<string>http</string>
+		<string>https</string>
+		<string>itms-apps</string>
+		<string>tez</string>
+		<string>phonepe</string>
+		<string>paytmmp</string>
+		<string>upi</string>
+		<string>credpay</string>
+		<string>gpay</string>
+		<string>whatsapp</string>
+	</array>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Lifestyle</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>lifestyle</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<!-- Firebase Cloud Messaging: allow background/remote notifications -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
+</dict>
+</plist>
